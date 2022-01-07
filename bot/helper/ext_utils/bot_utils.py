@@ -4,11 +4,9 @@ import time
 import math
 import psutil
 import shutil
-import requests
-import urllib.request
 
 from bot.helper.telegram_helper.bot_commands import BotCommands
-from bot import dispatcher, download_dict, download_dict_lock, STATUS_LIMIT, botStartTime
+from bot import dispatcher, download_dict, download_dict_lock, STATUS_LIMIT, botStartTime, LOGGER
 from telegram import InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 from bot.helper.telegram_helper import button_build, message_utils
@@ -22,14 +20,14 @@ PAGE_NO = 1
 
 
 class MirrorStatus:
-    STATUS_UPLOADING = "Uploading...📤"
-    STATUS_DOWNLOADING = "Downloading...📥"
-    STATUS_CLONING = "Cloning...♻️"
+    STATUS_UPLOADING = "Uploading CMT...📤"
+    STATUS_DOWNLOADING = "Downloading CMT...📥"
+    STATUS_CLONING = "Cloning CMT...♻️"
     STATUS_WAITING = "Queued...💤"
     STATUS_FAILED = "Failed 🚫. Cleaning Download..."
     STATUS_PAUSE = "Paused...⛔️"
     STATUS_ARCHIVING = "Archiving...🔐"
-    STATUS_EXTRACTING = "Extracting...📂"
+    STATUS_EXTRACTING = "Extracting CMT...📂"
     STATUS_SPLITTING = "Splitting...✂️"
     STATUS_CHECKING = "CheckingUp...📝"
     STATUS_SEEDING = "Seeding...🌧"
@@ -95,6 +93,7 @@ def getAllDownload():
                     MirrorStatus.STATUS_CLONING,
                     MirrorStatus.STATUS_UPLOADING,
                     MirrorStatus.STATUS_CHECKING,
+                    MirrorStatus.STATUS_SEEDING,
                 ]
                 and dlDetails
             ):
@@ -107,8 +106,8 @@ def get_progress_bar_string(status):
     p = 0 if total == 0 else round(completed * 100 / total)
     p = min(max(p, 0), 100)
     cFull = p // 8
-    p_str = '■' * cFull
-    p_str += '□' * (12 - cFull)
+    p_str = '█' * cFull
+    p_str += '░' * (15 - cFull)
     p_str = f"[{p_str}]"
     return p_str
 
@@ -200,26 +199,23 @@ def turn(update, context):
     data = query.data
     data = data.split(' ')
     query.answer()
-    try:
-        with download_dict_lock:
-            global COUNT, PAGE_NO
-            if data[1] == "nex":
-                if PAGE_NO == pages:
-                    COUNT = 0
-                    PAGE_NO = 1
-                else:
-                    COUNT += STATUS_LIMIT
-                    PAGE_NO += 1
-            elif data[1] == "pre":
-                if PAGE_NO == 1:
-                    COUNT = STATUS_LIMIT * (pages - 1)
-                    PAGE_NO = pages
-                else:
-                    COUNT -= STATUS_LIMIT
-                    PAGE_NO -= 1
-        message_utils.update_all_messages()
-    except:
-        query.message.delete()
+    with download_dict_lock:
+        global COUNT, PAGE_NO
+        if data[1] == "nex":
+           if PAGE_NO == pages:
+                COUNT = 0
+                PAGE_NO = 1
+           else:
+                COUNT += STATUS_LIMIT
+                PAGE_NO += 1
+        elif data[1] == "pre":
+            if PAGE_NO == 1:
+                COUNT = STATUS_LIMIT * (pages - 1)
+                PAGE_NO = pages
+            else:
+                COUNT -= STATUS_LIMIT
+                PAGE_NO -= 1
+    message_utils.update_all_messages()
 
 def get_readable_time(seconds: int) -> str:
     result = ''
@@ -277,22 +273,6 @@ def new_thread(fn):
         return thread
 
     return wrapper
-
-def get_content_type(link: str):
-    try:
-        res = requests.head(link, allow_redirects=True, timeout=5)
-        content_type = res.headers.get('content-type')
-    except:
-        content_type = None
-
-    if content_type is None:
-        try:
-            res = urllib.request.urlopen(link, timeout=5)
-            info = res.info()
-            content_type = info.get_content_type()
-        except:
-            content_type = None
-    return content_type
 
 status_handler = CallbackQueryHandler(turn, pattern="status", run_async=True)
 dispatcher.add_handler(status_handler)
